@@ -1,0 +1,44 @@
+{
+  "name": "fiableauto-production",
+  "version": "1.0.0",
+  "description": "FiableAuto - Application professionnelle d'inspection et convoyage de véhicules",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "build": "echo 'Build completed'",
+    "test": "echo 'No tests specified'"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "pg": "^8.11.3",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "express-rate-limit": "^7.1.5",
+    "express-fileupload": "^1.4.3",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^6.9.7",
+    "aws-sdk": "^2.1498.0",
+    "pdfkit": "^0.13.0",
+    "dotenv": "^16.3.1",
+    "joi": "^17.11.0",
+    "uuid": "^9.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "fiableauto",
+    "inspection",
+    "convoyage",
+    "vehicules",
+    "automobile"
+  ],
+  "author": "FiableAuto",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/autofiable/fiableauto-production.git"
+  }
+}
