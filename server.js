@@ -10,6 +10,7 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
 // CORS Configuration
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', 'https://fiableauto-frontend.vercel.app');
@@ -21,6 +22,7 @@ app.use((req, res, next) => {
     }
     next();
 });
+
 console.log('🚗 Démarrage FiableAuto Backend...');
 
 // Configuration PostgreSQL
@@ -147,7 +149,7 @@ app.use(helmet({
 
 // CORS
 const allowedOrigins = process.env.NODE_ENV === 'production' 
-    ? ['https://fiableauto.fr', 'https://www.fiableauto.fr', 'https://fiableauto.vercel.app']
+    ? ['https://fiableauto.fr', 'https://www.fiableauto.fr', 'https://fiableauto-frontend.vercel.app']
     : ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:5173'];
 
 app.use(cors({
@@ -585,18 +587,28 @@ app.get('/api/reports/:missionId/pdf', async (req, res) => {
     }
 });
 
-// Servir fichiers statiques
-app.use(express.static('public'));
+// Route de base - API SEULEMENT (pas de fichiers statiques)
+app.get('/', (req, res) => {
+    res.json({
+        success: true,
+        message: 'FiableAuto API Server',
+        version: '1.0.0',
+        endpoints: {
+            health: '/api/health',
+            stats: '/api/stats',
+            missions: '/api/missions',
+            uploads: '/api/uploads'
+        }
+    });
+});
 
-// Route catch-all
-app.get('*', (req, res) => {
-    if (req.path.startsWith('/api/')) {
-        return res.status(404).json({
-            success: false,
-            message: 'Route API introuvable'
-        });
-    }
-    res.sendFile(path.join(__dirname, 'public/index.html'));
+// Route catch-all pour API seulement
+app.use('*', (req, res) => {
+    res.status(404).json({
+        success: false,
+        message: 'Route introuvable',
+        available_endpoints: ['/api/health', '/api/stats', '/api/missions']
+    });
 });
 
 // Gestionnaire d'erreurs
