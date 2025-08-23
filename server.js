@@ -1,4 +1,4 @@
-// ===== server.js - FiableAuto Backend Production =====
+// ===== server.js - FiableAuto Backend Production Enhanced =====
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -23,7 +23,7 @@ app.use((req, res, next) => {
     next();
 });
 
-console.log('🚗 Démarrage FiableAuto Backend...');
+console.log('🚗 Démarrage FiableAuto Backend Enhanced...');
 
 // Configuration PostgreSQL
 const pool = new Pool({
@@ -52,10 +52,10 @@ async function initializeApp() {
     }
 }
 
-// Initialisation des tables
+// Initialisation des tables Enhanced
 async function initDatabase() {
     try {
-        // Table missions
+        // Table missions Enhanced
         await pool.query(`
             CREATE TABLE IF NOT EXISTS missions (
                 id SERIAL PRIMARY KEY,
@@ -66,10 +66,14 @@ async function initDatabase() {
                 license_plate VARCHAR(20),
                 vin VARCHAR(50),
                 mileage INTEGER,
+                fuel_level VARCHAR(20),
+                interior_condition VARCHAR(20),
+                exterior_condition VARCHAR(20),
+                mission_type VARCHAR(20) DEFAULT 'inspection',
                 pickup_location TEXT NOT NULL,
                 delivery_location TEXT NOT NULL,
-                pickup_date DATE,
-                delivery_date DATE,
+                pickup_date TIMESTAMP,
+                delivery_date TIMESTAMP,
                 urgency VARCHAR(20) DEFAULT 'normal',
                 client_name VARCHAR(255) NOT NULL,
                 client_email VARCHAR(255) NOT NULL,
@@ -92,7 +96,7 @@ async function initDatabase() {
             )
         `);
 
-        // Table photos
+        // Table photos Enhanced
         await pool.query(`
             CREATE TABLE IF NOT EXISTS mission_photos (
                 id SERIAL PRIMARY KEY,
@@ -108,6 +112,21 @@ async function initDatabase() {
                 gps_longitude DECIMAL(11, 8),
                 device_info TEXT,
                 UNIQUE(mission_id, photo_type)
+            )
+        `);
+
+        // Table inspections Enhanced (NOUVELLE)
+        await pool.query(`
+            CREATE TABLE IF NOT EXISTS inspections (
+                id SERIAL PRIMARY KEY,
+                mission_id INTEGER UNIQUE REFERENCES missions(id) ON DELETE CASCADE,
+                observations TEXT,
+                signature TEXT,
+                checklist JSONB,
+                key_count INTEGER DEFAULT 0,
+                optional_photos_count INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         `);
 
@@ -127,7 +146,7 @@ async function initDatabase() {
             )
         `);
 
-        console.log('✅ Tables créées/vérifiées');
+        console.log('✅ Tables créées/vérifiées (Enhanced)');
     } catch (error) {
         console.error('❌ Erreur initialisation DB:', error);
     }
@@ -147,7 +166,7 @@ app.use(helmet({
     },
 }));
 
-// CORS
+// CORS Enhanced
 const allowedOrigins = process.env.NODE_ENV === 'production' 
     ? ['https://fiableauto.fr', 'https://www.fiableauto.fr', 'https://fiableauto-frontend.vercel.app']
     : ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:5173'];
@@ -189,16 +208,17 @@ app.use((req, res, next) => {
     next();
 });
 
-// ===== ROUTES API =====
+// ===== ROUTES API ENHANCED =====
 
 // Health check
 app.get('/api/health', (req, res) => {
     res.json({
         success: true,
-        message: 'FiableAuto API is running',
+        message: 'FiableAuto API Enhanced is running',
         timestamp: new Date().toISOString(),
-        version: '1.0.0',
-        environment: process.env.NODE_ENV || 'development'
+        version: '2.0.0',
+        environment: process.env.NODE_ENV || 'development',
+        features: ['archivage', 'checklist', 'dark-mode', 'geolocation', 'pwa-ready']
     });
 });
 
@@ -227,7 +247,7 @@ async function generateMissionCode() {
     }
 }
 
-// GET /api/stats
+// GET /api/stats Enhanced
 app.get('/api/stats', async (req, res) => {
     try {
         const result = await pool.query(`
@@ -255,18 +275,41 @@ app.get('/api/stats', async (req, res) => {
     }
 });
 
-// POST /api/missions
+// GET /api/missions - NOUVEAU : Lister toutes les missions (ARCHIVAGE)
+app.get('/api/missions', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT * FROM missions 
+            ORDER BY created_at DESC
+        `);
+        
+        res.json({
+            success: true,
+            data: result.rows
+        });
+        
+    } catch (error) {
+        console.error('Erreur récupération missions:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Erreur lors de la récupération des missions'
+        });
+    }
+});
+
+// POST /api/missions Enhanced
 app.post('/api/missions', async (req, res) => {
     try {
         const {
             vehicleBrand, vehicleModel, vehicleYear, licensePlate, vin, mileage,
+            fuelLevel, interiorCondition, exteriorCondition, missionType,
             pickupLocation, deliveryLocation, pickupDate, deliveryDate, urgency,
             clientName, clientEmail, clientPhone, clientCompany,
             providerName, providerEmail, providerPhone,
             observations, internalNotes
         } = req.body;
 
-        // Validation
+        // Validation Enhanced
         if (!vehicleBrand || !vehicleModel || !pickupLocation || !deliveryLocation || !clientName || !clientEmail) {
             return res.status(400).json({
                 success: false,
@@ -279,17 +322,19 @@ app.post('/api/missions', async (req, res) => {
         const query = `
             INSERT INTO missions (
                 mission_code, vehicle_brand, vehicle_model, vehicle_year,
-                license_plate, vin, mileage, pickup_location, delivery_location,
+                license_plate, vin, mileage, fuel_level, interior_condition, exterior_condition,
+                mission_type, pickup_location, delivery_location,
                 pickup_date, delivery_date, urgency, client_name, client_email,
                 client_phone, client_company, provider_name, provider_email,
                 provider_phone, observations, internal_notes, status
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
             RETURNING *
         `;
         
         const values = [
             missionCode, vehicleBrand, vehicleModel, vehicleYear,
-            licensePlate, vin, mileage, pickupLocation, deliveryLocation,
+            licensePlate, vin, mileage, fuelLevel, interiorCondition, exteriorCondition,
+            missionType || 'inspection', pickupLocation, deliveryLocation,
             pickupDate, deliveryDate, urgency || 'normal', clientName, clientEmail,
             clientPhone, clientCompany, providerName, providerEmail,
             providerPhone, observations, internalNotes, 'pending'
@@ -312,13 +357,57 @@ app.post('/api/missions', async (req, res) => {
     }
 });
 
-// GET /api/missions/:code
+// POST /api/missions/:id/inspection - NOUVEAU : Sauvegarder inspection complète
+app.post('/api/missions/:id/inspection', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { observations, signature, checklist, keyCount, optionalPhotos } = req.body;
+        
+        // Insérer/Mettre à jour inspection
+        const result = await pool.query(`
+            INSERT INTO inspections (mission_id, observations, signature, checklist, key_count, optional_photos_count)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (mission_id) DO UPDATE SET
+                observations = EXCLUDED.observations,
+                signature = EXCLUDED.signature,
+                checklist = EXCLUDED.checklist,
+                key_count = EXCLUDED.key_count,
+                optional_photos_count = EXCLUDED.optional_photos_count,
+                updated_at = CURRENT_TIMESTAMP
+            RETURNING *
+        `, [id, observations, signature, JSON.stringify(checklist), keyCount, optionalPhotos]);
+        
+        // Mettre à jour aussi la table missions
+        await pool.query(
+            'UPDATE missions SET observations = $2, client_signature = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+            [id, observations, signature]
+        );
+        
+        res.json({
+            success: true,
+            data: result.rows[0],
+            message: 'Inspection sauvegardée avec succès'
+        });
+        
+    } catch (error) {
+        console.error('Erreur sauvegarde inspection:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Erreur lors de la sauvegarde de l\'inspection'
+        });
+    }
+});
+
+// GET /api/missions/:code Enhanced
 app.get('/api/missions/:code', async (req, res) => {
     try {
         const { code } = req.params;
         
         const query = `
             SELECT m.*, 
+                   i.checklist,
+                   i.key_count,
+                   i.optional_photos_count,
                    COALESCE(
                        json_agg(
                            json_build_object(
@@ -332,9 +421,10 @@ app.get('/api/missions/:code', async (req, res) => {
                        '[]'::json
                    ) as photos
             FROM missions m
+            LEFT JOIN inspections i ON m.id = i.mission_id
             LEFT JOIN mission_photos mp ON m.id = mp.mission_id
             WHERE m.mission_code = $1 OR m.id::text = $1
-            GROUP BY m.id
+            GROUP BY m.id, i.checklist, i.key_count, i.optional_photos_count
         `;
         
         const result = await pool.query(query, [code]);
@@ -360,20 +450,20 @@ app.get('/api/missions/:code', async (req, res) => {
     }
 });
 
-// PUT /api/missions/:id/status
+// PUT /api/missions/:id/status Enhanced
 app.put('/api/missions/:id/status', async (req, res) => {
     try {
         const { id } = req.params;
         const { status } = req.body;
         
-        if (!['pending', 'in_progress', 'completed', 'cancelled'].includes(status)) {
+        if (!['pending', 'assigned', 'in_progress', 'photos_taken', 'completed', 'cancelled'].includes(status)) {
             return res.status(400).json({
                 success: false,
                 message: 'Statut invalide'
             });
         }
         
-        let updateQuery = 'UPDATE missions SET status = $2';
+        let updateQuery = 'UPDATE missions SET status = $2, updated_at = CURRENT_TIMESTAMP';
         const values = [id, status];
         
         if (status === 'in_progress') {
@@ -408,7 +498,7 @@ app.put('/api/missions/:id/status', async (req, res) => {
     }
 });
 
-// POST /api/uploads/photos/:missionId
+// POST /api/uploads/photos/:missionId Enhanced
 app.post('/api/uploads/photos/:missionId', async (req, res) => {
     try {
         const { missionId } = req.params;
@@ -442,7 +532,7 @@ app.post('/api/uploads/photos/:missionId', async (req, res) => {
         
         // Simuler stockage (en attendant Cloudflare R2)
         const filename = `${Date.now()}_${photo.name}`;
-        const mockUrl = `https://via.placeholder.com/400x300/3b82f6/ffffff?text=${encodeURIComponent(photoType)}`;
+        const mockUrl = `https://via.placeholder.com/400x300/007bff/ffffff?text=${encodeURIComponent(photoType)}`;
         
         const query = `
             INSERT INTO mission_photos (
@@ -481,54 +571,14 @@ app.post('/api/uploads/photos/:missionId', async (req, res) => {
     }
 });
 
-// POST /api/missions/:id/signature
-app.post('/api/missions/:id/signature', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { signature } = req.body;
-        
-        if (!signature) {
-            return res.status(400).json({
-                success: false,
-                message: 'Signature requise'
-            });
-        }
-        
-        const result = await pool.query(
-            'UPDATE missions SET client_signature = $2, signature_timestamp = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *',
-            [id, signature]
-        );
-        
-        if (result.rows.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: 'Mission introuvable'
-            });
-        }
-        
-        res.json({
-            success: true,
-            data: result.rows[0],
-            message: 'Signature ajoutée avec succès'
-        });
-        
-    } catch (error) {
-        console.error('Erreur signature:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Erreur lors de l\'ajout de la signature'
-        });
-    }
-});
-
-// PUT /api/missions/:id/observations
+// PUT /api/missions/:id/observations Enhanced (auto-save)
 app.put('/api/missions/:id/observations', async (req, res) => {
     try {
         const { id } = req.params;
         const { observations } = req.body;
         
         const result = await pool.query(
-            'UPDATE missions SET observations = $2 WHERE id = $1 RETURNING *',
+            'UPDATE missions SET observations = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *',
             [id, observations]
         );
         
@@ -554,7 +604,174 @@ app.put('/api/missions/:id/observations', async (req, res) => {
     }
 });
 
-// GET /api/reports/:missionId/pdf
+// POST /api/missions/:id/signature Enhanced
+app.post('/api/missions/:id/signature', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { signature } = req.body;
+        
+        if (!signature) {
+            return res.status(400).json({
+                success: false,
+                message: 'Signature requise'
+            });
+        }
+        
+        const result = await pool.query(
+            'UPDATE missions SET client_signature = $2, signature_timestamp = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *',
+            [id, signature]
+        );
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Mission introuvable'
+            });
+        }
+        
+        res.json({
+            success: true,
+            data: result.rows[0],
+            message: 'Signature ajoutée avec succès'
+        });
+        
+    } catch (error) {
+        console.error('Erreur signature:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Erreur lors de l\'ajout de la signature'
+        });
+    }
+});
+
+// GET /api/stats/advanced - NOUVEAU : Statistiques avancées
+app.get('/api/stats/advanced', async (req, res) => {
+    try {
+        const results = await Promise.all([
+            // Stats de base
+            pool.query(`
+                SELECT 
+                    COUNT(*) as total,
+                    COUNT(*) FILTER (WHERE status = 'pending') as pending,
+                    COUNT(*) FILTER (WHERE status = 'in_progress') as in_progress,
+                    COUNT(*) FILTER (WHERE status = 'completed') as completed,
+                    COUNT(*) FILTER (WHERE status = 'cancelled') as cancelled
+                FROM missions
+            `),
+            
+            // Stats par mois
+            pool.query(`
+                SELECT 
+                    DATE_TRUNC('month', created_at) as month,
+                    COUNT(*) as count
+                FROM missions 
+                WHERE created_at >= NOW() - INTERVAL '12 months'
+                GROUP BY DATE_TRUNC('month', created_at)
+                ORDER BY month
+            `),
+            
+            // Top véhicules
+            pool.query(`
+                SELECT 
+                    CONCAT(vehicle_brand, ' ', vehicle_model) as vehicle,
+                    COUNT(*) as count
+                FROM missions 
+                GROUP BY vehicle_brand, vehicle_model
+                ORDER BY count DESC
+                LIMIT 10
+            `),
+            
+            // Temps moyen de traitement
+            pool.query(`
+                SELECT 
+                    AVG(EXTRACT(EPOCH FROM (completed_at - created_at))/3600) as avg_hours
+                FROM missions 
+                WHERE completed_at IS NOT NULL
+            `)
+        ]);
+        
+        res.json({
+            success: true,
+            data: {
+                basic: results[0].rows[0],
+                monthly: results[1].rows,
+                topVehicles: results[2].rows,
+                avgProcessingHours: results[3].rows[0]?.avg_hours || 0
+            }
+        });
+        
+    } catch (error) {
+        console.error('Erreur stats avancées:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Erreur lors du calcul des statistiques'
+        });
+    }
+});
+
+// GET /api/missions/search - NOUVEAU : Recherche avancée
+app.get('/api/missions/search', async (req, res) => {
+    try {
+        const { q, status, dateFrom, dateTo, vehicleBrand } = req.query;
+        
+        let query = 'SELECT * FROM missions WHERE 1=1';
+        const params = [];
+        let paramIndex = 1;
+        
+        if (q) {
+            query += ` AND (
+                mission_code ILIKE $${paramIndex} OR 
+                client_name ILIKE $${paramIndex} OR 
+                vehicle_brand ILIKE $${paramIndex} OR 
+                vehicle_model ILIKE $${paramIndex}
+            )`;
+            params.push(`%${q}%`);
+            paramIndex++;
+        }
+        
+        if (status) {
+            query += ` AND status = $${paramIndex}`;
+            params.push(status);
+            paramIndex++;
+        }
+        
+        if (dateFrom) {
+            query += ` AND created_at >= $${paramIndex}`;
+            params.push(dateFrom);
+            paramIndex++;
+        }
+        
+        if (dateTo) {
+            query += ` AND created_at <= $${paramIndex}`;
+            params.push(dateTo);
+            paramIndex++;
+        }
+        
+        if (vehicleBrand) {
+            query += ` AND vehicle_brand ILIKE $${paramIndex}`;
+            params.push(`%${vehicleBrand}%`);
+            paramIndex++;
+        }
+        
+        query += ' ORDER BY created_at DESC LIMIT 100';
+        
+        const result = await pool.query(query, params);
+        
+        res.json({
+            success: true,
+            data: result.rows
+        });
+        
+    } catch (error) {
+        console.error('Erreur recherche:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Erreur lors de la recherche'
+        });
+    }
+});
+
+// GET /api/reports/:missionId/pdf Enhanced
 app.get('/api/reports/:missionId/pdf', async (req, res) => {
     try {
         const { missionId } = req.params;
@@ -575,7 +792,7 @@ app.get('/api/reports/:missionId/pdf', async (req, res) => {
             });
         }
         
-        // Redirection vers PDF demo
+        // Redirection vers PDF demo Enhanced
         res.redirect('https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf');
         
     } catch (error) {
@@ -587,57 +804,70 @@ app.get('/api/reports/:missionId/pdf', async (req, res) => {
     }
 });
 
-// Route de base - API SEULEMENT (pas de fichiers statiques)
+// Route de base Enhanced
 app.get('/', (req, res) => {
     res.json({
         success: true,
-        message: 'FiableAuto API Server',
-        version: '1.0.0',
+        message: 'FiableAuto API Server Enhanced',
+        version: '2.0.0',
+        features: ['archivage', 'checklist-complete', 'dark-mode', 'geolocation', 'pwa-ready'],
         endpoints: {
             health: '/api/health',
             stats: '/api/stats',
+            'stats-advanced': '/api/stats/advanced',
             missions: '/api/missions',
-            uploads: '/api/uploads'
+            'mission-search': '/api/missions/search',
+            uploads: '/api/uploads',
+            reports: '/api/reports'
         }
     });
 });
 
-// Route catch-all pour API seulement
+// Route catch-all Enhanced
 app.use('*', (req, res) => {
     res.status(404).json({
         success: false,
         message: 'Route introuvable',
-        available_endpoints: ['/api/health', '/api/stats', '/api/missions']
+        available_endpoints: [
+            '/api/health', 
+            '/api/stats', 
+            '/api/missions', 
+            '/api/missions/search',
+            '/api/stats/advanced'
+        ]
     });
 });
 
-// Gestionnaire d'erreurs
+// Gestionnaire d'erreurs Enhanced
 app.use((err, req, res, next) => {
-    console.error('Erreur serveur:', err);
+    console.error('Erreur serveur Enhanced:', err);
     res.status(500).json({
         success: false,
-        message: 'Erreur interne du serveur'
+        message: 'Erreur interne du serveur',
+        timestamp: new Date().toISOString()
     });
 });
 
-// Graceful shutdown
+// Graceful shutdown Enhanced
 process.on('SIGTERM', () => {
-    console.log('SIGTERM reçu, arrêt gracieux...');
+    console.log('SIGTERM reçu, arrêt gracieux Enhanced...');
     server.close(() => {
         pool.end();
         process.exit(0);
     });
 });
 
-// Démarrage du serveur
+// Démarrage du serveur Enhanced
 const server = app.listen(PORT, () => {
-    console.log(`🚗 FiableAuto Backend Production`);
+    console.log(`🚗 FiableAuto Backend Production Enhanced`);
     console.log(`🌍 Port: ${PORT}`);
     console.log(`🔥 Mode: ${process.env.NODE_ENV || 'development'}`);
     console.log(`🚀 API Health: /api/health`);
+    console.log(`✨ Features: Archivage, Checklist, Dark Mode, PWA Ready`);
+    console.log(`📊 New Endpoints: /api/missions, /api/missions/search, /api/stats/advanced`);
 });
 
-// Initialiser l'application
+// Initialiser l'application Enhanced
 initializeApp();
 
 module.exports = app;
